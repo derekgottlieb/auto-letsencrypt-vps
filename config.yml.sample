@@ -1,0 +1,8 @@
+debug: false
+
+letsencrypt:
+  email: email@example.com
+
+cloudflare:
+  user_api_key: longapikey
+  user_email: email@example.com
