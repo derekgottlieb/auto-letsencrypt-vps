@@ -1,52 +1,59 @@
 require 'pry-byebug'
-require 'cloudflare'
+require 'rubyflare'
 require 'json'
 require 'pp'
 require 'socket'
 require 'date'
 require 'fileutils'
 
-File.expand_path(File.dirname(__FILE__))
+def direct_a_record?(record_type: , record_content: , local_ips: [])
+  record_type == 'A' && local_ips.include?(record_content)
+end
+
+def indirect_cname?(record_type: , record_content: , local_hostname: )
+  record_type == 'CNAME' && record_content == local_hostname
+end
 
 # Get the hostname for this host to compare against CNAME records in Cloudflare
 hostname = Socket.gethostbyname(Socket.gethostname).first
 
 # Get the IPv4 addresses for this host to compare against A records in Cloudflare
-ip_addresses = Socket.ip_address_list.find_all { |ai| ai.ipv4? && !ai.ipv4_loopback? }.map { 
-|ai| ai.ip_address }
+ip_addresses ||= Socket.ip_address_list.find_all { |ai| ai.ipv4? && !ai.ipv4_loopback? }.map { |ai| ai.ip_address }
 
 CONFIG = YAML.load(File.open(File.expand_path(File.dirname(__FILE__)) + "/config.yml"))
 
-cf = CloudFlare::connection(CONFIG['cloudflare']['user_api_key'], CONFIG['cloudflare']['user_email'])
+cf = Rubyflare.connect_with(CONFIG['cloudflare']['user_email'], CONFIG['cloudflare']['user_api_key'])
 
 begin
-  zones = cf.zone_load_multi
-  zone_names = zones.fetch('response').fetch('zones').fetch('objs').map {|zone| zone.fetch('zone_name')}
-  puts "Found #{zone_names} zones in Cloudflare" if CONFIG['debug']
+  zones_raw = cf.get('zones')
+
+  zones = {}
+  zones_raw.results.map { |z| zones[z[:name]] = z[:id] }
+  puts "Found #{zones.size} zones in Cloudflare" if CONFIG['debug']
 rescue => e
   puts e.message # error message
 end
 
 begin
-  domains_hosted_here = zone_names.map {|zone_name|
-    recs = cf.rec_load_all(zone_name)
+  domains_hosted_here = zones.map {|zone_name,zone_id|
+    recs = cf.get("zones/#{zone_id}/dns_records")
 
-    domains_hosted_here_zone = recs.fetch('response').fetch('recs').fetch('objs').map {|record|
+    domains_hosted_here_zone = recs.results.map { |record|
+      name = record[:name]
+      type = record[:type]
+      content = record[:content]
       record_name = nil
-      puts "Checking #{record.fetch('name')} / #{record.fetch('type')}" if CONFIG['debug']
+      puts "Checking #{name} / #{type}" if CONFIG['debug']
       
       # Make sure we've actually got a web directory for this domain
-      if File.directory?('/var/www/' + record.fetch('name'))
-        case record.fetch('type') 
-          when 'A'
-            if ip_addresses.include?(record.fetch('content'))
-              record_name = record.fetch('name')
-            end
-          when 'CNAME'
-            if record.fetch('content') == hostname
-              record_name = record.fetch('name')
-            end
-        end
+      if File.directory?('/var/www/' + name) &&
+         (direct_a_record?(record_type: type,
+                           record_content: content,
+                           local_ips: ip_addresses) ||
+          indirect_cname?(record_type: type,
+                          record_content: content,
+                          local_hostname: hostname))
+        record_name = name
       end
 
       record_name
