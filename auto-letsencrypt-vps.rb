@@ -38,12 +38,12 @@ begin
   domains_hosted_here = zones.map {|zone_name,zone_id|
     a_recs = cf.get("zones/#{zone_id}/dns_records", {"type" => "A"})
     cname_recs = cf.get("zones/#{zone_id}/dns_records", {"type" => "CNAME"})
-    recs = a_recs + cname_recs
+    recs = Array(a_recs.results) + Array(cname_recs.results)
 
-    domains_hosted_here_zone = recs.results.map { |record|
+    domains_hosted_here_zone = recs.map { |record|
       name = record[:name]
       type = record[:type]
-      content = record[:content]
+      content = record.fetch(:content)
       record_name = nil
       puts "Checking #{name} / #{type}" if CONFIG['debug']
       
@@ -100,7 +100,7 @@ domains_hosted_here.map {|domain|
   
   unless skip
     puts "Updating cert for #{domain}" if CONFIG['debug']
-    system("cd #{cert_dir} && /usr/local/sbin/simp_le --email #{CONFIG['letsencrypt']['email']} -d #{domain}:/tmp/letsencrypt -f key.pem -f cert.pem -f fullchain.pem -f account_key.json")
+    system("cd #{cert_dir} && /usr/local/sbin/simp_le --email #{CONFIG['letsencrypt']['email']} -d #{domain}:/tmp/letsencrypt -f key.pem -f cert.pem -f fullchain.pem -f account_key.json --tos_sha256 6373439b9f29d67a5cd4d18cbc7f264809342dbf21cb2ba2fc7588df987a6221")
     certs_updated = true
   end
 }
