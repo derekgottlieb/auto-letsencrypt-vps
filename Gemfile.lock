@@ -2,10 +2,8 @@ GEM
   remote: https://rubygems.org/
   specs:
     byebug (8.2.1)
-    cloudflare (2.0.3)
-      json (~> 1)
     coderay (1.1.0)
-    json (1.8.3)
+    curb (0.9.3)
     method_source (0.8.2)
     pry (0.10.3)
       coderay (~> 1.1.0)
@@ -14,14 +12,16 @@ GEM
     pry-byebug (3.3.0)
       byebug (~> 8.0)
       pry (~> 0.10)
+    rubyflare (0.2.0)
+      curb (~> 0.9.3)
     slop (3.6.0)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
-  cloudflare
   pry-byebug
+  rubyflare
 
 BUNDLED WITH
-   1.10.6
+   1.13.6
