@@ -36,7 +36,9 @@ end
 
 begin
   domains_hosted_here = zones.map {|zone_name,zone_id|
-    recs = cf.get("zones/#{zone_id}/dns_records")
+    a_recs = cf.get("zones/#{zone_id}/dns_records", {"type" => "A"})
+    cname_recs = cf.get("zones/#{zone_id}/dns_records", {"type" => "CNAME"})
+    recs = a_recs + cname_recs
 
     domains_hosted_here_zone = recs.results.map { |record|
       name = record[:name]
@@ -73,6 +75,7 @@ if domains_hosted_here.nil?
   exit 1
 end
   
+certs_updated = false
 
 domains_hosted_here.map {|domain|
   skip = false
@@ -81,6 +84,7 @@ domains_hosted_here.map {|domain|
   
   unless File.directory?(cert_dir)
     FileUtils.mkdir_p cert_dir
+    FileUtils.mkdir_p "/tmp/letsencrypt/.well-known/acme-challenge"
   end
   
   # If we have an existing certificate, determine if it's expiring within the next month
@@ -97,5 +101,10 @@ domains_hosted_here.map {|domain|
   unless skip
     puts "Updating cert for #{domain}" if CONFIG['debug']
     system("cd #{cert_dir} && /usr/local/sbin/simp_le --email #{CONFIG['letsencrypt']['email']} -d #{domain}:/tmp/letsencrypt -f key.pem -f cert.pem -f fullchain.pem -f account_key.json")
+    certs_updated = true
   end
 }
+
+if certs_updated
+  system("/etc/init.d/nginx reload")
+end
