@@ -1,3 +1,4 @@
+require 'openssl'
 require 'pry-byebug'
 require 'rubyflare'
 require 'json'
